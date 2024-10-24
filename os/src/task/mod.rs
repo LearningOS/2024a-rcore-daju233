@@ -14,9 +14,11 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
+
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_ms;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -54,6 +56,8 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            task_syscall:[0;MAX_SYSCALL_NUM],
+            task_runningtime:0,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -72,6 +76,27 @@ lazy_static! {
 }
 
 impl TaskManager {
+    ///获取时间
+    fn get_task_running_time(&self)->usize{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_runningtime
+    }
+
+    /// 获取系统调用数组的值
+    fn get_syscall(&self) -> [u32;500] {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let syscall_arr = inner.tasks[current].task_syscall;
+        syscall_arr
+    }
+    /// 设置数组
+    fn set_syscall(&self,newarr:[u32;500]){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_syscall=newarr;
+
+    }
     /// Run the first task in task list.
     ///
     /// Generally, the first task in task list is an idle task (we call it zero process later).
@@ -79,6 +104,9 @@ impl TaskManager {
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
+        //任务开始时间
+        task0.task_runningtime = get_time_ms();
+        println!("first task time is {}",task0.task_runningtime);
         task0.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
@@ -122,6 +150,12 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
+            //任务开始时间
+            inner.tasks[next].task_runningtime=match inner.tasks[next].task_runningtime{
+                0 => get_time_ms(),
+                _=>inner.tasks[next].task_runningtime,
+            };
+
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -168,4 +202,17 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+///获取当前任务开始时间
+pub fn get_curr_running_time()->usize{
+    TASK_MANAGER.get_task_running_time()
+}
+///获取当前调用数量
+pub fn get_curr_syscall()->[u32; 500]{
+    TASK_MANAGER.get_syscall()
+}
+///设置新的调用数量
+pub fn set_curr_syscall(newarr:[u32;500]){
+    TASK_MANAGER.set_syscall(newarr);
 }

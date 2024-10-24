@@ -23,6 +23,7 @@ use riscv::register::{
     scause::{self, Exception, Interrupt, Trap},
     sie, stval, stvec,
 };
+use crate::task::{get_curr_syscall, set_curr_syscall};
 
 global_asm!(include_str!("trap.S"));
 
@@ -49,6 +50,9 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     let scause = scause::read(); // get trap cause
     let stval = stval::read(); // get extra value
                                // trace!("into {:?}", scause.cause());
+    let mut syscall_arr = get_curr_syscall();
+    syscall_arr[cx.x[17]]+=1;
+    set_curr_syscall(syscall_arr);                            
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
             // jump to next instruction anyway
