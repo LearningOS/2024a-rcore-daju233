@@ -26,6 +26,7 @@ use riscv::register::{
     scause::{self, Exception, Interrupt, Trap},
     sie, stval, stvec,
 };
+// use crate::task::{get_curr_syscall,set_curr_syscall};
 
 global_asm!(include_str!("trap.S"));
 

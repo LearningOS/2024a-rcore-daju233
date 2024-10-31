@@ -25,9 +25,11 @@ use crate::loader::get_app_data_by_name;
 use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
+use crate::mm::{StepByOne, VirtAddr};
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
-
+use crate::timer::get_time_ms;
+use crate::mm::MapPermission;
 pub use context::TaskContext;
 pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 pub use manager::add_task;
@@ -114,4 +116,25 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+
+///获取当前任务开始时间
+pub fn get_curr_running_time()->usize{
+    TASK_MANAGER.get_task_running_time()
+}
+///获取当前调用数量
+pub fn get_curr_syscall()->[u32; 500]{
+    TASK_MANAGER.get_syscall()
+}
+///设置新的调用数量
+pub fn set_curr_syscall(syscall_id:usize){
+    TASK_MANAGER.plus_syscall(syscall_id);
+}
+///修改地址空间
+pub fn set_curr_memory_set(start_va:VirtAddr, end_va:VirtAddr, permission:MapPermission){
+    TASK_MANAGER.set_memory_set(start_va, end_va, permission);
+}
+///取消映射
+pub fn set_unmap(start_va:VirtAddr, len:usize){
+    TASK_MANAGER.set_unmap(start_va, len)
 }

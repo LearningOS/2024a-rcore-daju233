@@ -8,13 +8,21 @@ use bitflags::*;
 bitflags! {
     /// page table entry flags
     pub struct PTEFlags: u8 {
+        ///IDK
         const V = 1 << 0;
+                ///IDK
         const R = 1 << 1;
+                ///IDK
         const W = 1 << 2;
+                ///IDK
         const X = 1 << 3;
+                ///IDK
         const U = 1 << 4;
+                ///IDK
         const G = 1 << 5;
+                ///IDK
         const A = 1 << 6;
+                ///IDK
         const D = 1 << 7;
     }
 }
@@ -22,6 +30,8 @@ bitflags! {
 #[derive(Copy, Clone)]
 #[repr(C)]
 /// page table entry structure
+#[derive(Debug)]
+
 pub struct PageTableEntry {
     /// bits of page table entry
     pub bits: usize,
@@ -88,7 +98,7 @@ impl PageTable {
         }
     }
     /// Find PageTableEntry by VirtPageNum, create a frame for a 4KB page table if not exist
-    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+    pub fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
