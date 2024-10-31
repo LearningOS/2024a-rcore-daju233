@@ -16,13 +16,17 @@ mod task;
 
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
+// use crate::syscall;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
+use crate::mm::{StepByOne, VirtAddr};
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
-
+use crate::timer::get_time_ms;
+use crate::mm::MapPermission;
 pub use context::TaskContext;
+use crate::config::PAGE_SIZE;
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -71,6 +75,45 @@ lazy_static! {
 }
 
 impl TaskManager {
+    ///获取时间
+    fn get_task_running_time(&self)->usize{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_runningtime
+    }
+
+    /// 增加系统调用数组的值
+    fn plus_syscall(&self,syscall_id:usize){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_syscall[syscall_id]+=1;
+    }
+    /// 获得数组
+    fn get_syscall(&self)->[u32;500]{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_syscall
+
+    }
+
+    ///修改任务地址空间
+    fn set_memory_set(&self,start_va:VirtAddr,end_va:VirtAddr,permission:MapPermission){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.insert_framed_area(start_va, end_va, permission);
+    }
+    
+    ///unmmap实现,
+    fn set_unmap(&self,start_va:VirtAddr,len:usize){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let mut vpn=start_va.floor();
+
+        for _ in 0..((len + PAGE_SIZE - 1) / PAGE_SIZE){
+            inner.tasks[current].memory_set.page_table.unmap(vpn);
+            vpn.step();
+        }
+    }
     /// Run the first task in task list.
     ///
     /// Generally, the first task in task list is an idle task (we call it zero process later).
@@ -78,6 +121,8 @@ impl TaskManager {
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
         let next_task = &mut inner.tasks[0];
+        //任务开始时间
+        next_task.task_runningtime = get_time_ms();
         next_task.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
@@ -140,6 +185,11 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
+            //任务开始时间
+            inner.tasks[next].task_runningtime=match inner.tasks[next].task_runningtime{
+                0 => get_time_ms(),
+                _=>inner.tasks[next].task_runningtime,
+            };
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -201,4 +251,25 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+///获取当前任务开始时间
+pub fn get_curr_running_time()->usize{
+    TASK_MANAGER.get_task_running_time()
+}
+///获取当前调用数量
+pub fn get_curr_syscall()->[u32; 500]{
+    TASK_MANAGER.get_syscall()
+}
+///设置新的调用数量
+pub fn set_curr_syscall(syscall_id:usize){
+    TASK_MANAGER.plus_syscall(syscall_id);
+}
+///修改地址空间
+pub fn set_curr_memory_set(start_va:VirtAddr, end_va:VirtAddr, permission:MapPermission){
+    TASK_MANAGER.set_memory_set(start_va, end_va, permission);
+}
+///取消映射
+pub fn set_unmap(start_va:VirtAddr, len:usize){
+    TASK_MANAGER.set_unmap(start_va, len)
 }
