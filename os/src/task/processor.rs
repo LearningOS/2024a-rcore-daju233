@@ -11,7 +11,9 @@ use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
-
+use crate::mm::{MapPermission, VirtAddr};
+use crate::config::PAGE_SIZE;
+use crate::mm::StepByOne;
 /// Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
@@ -109,3 +111,33 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
 }
+
+    ///获取时间
+    pub fn get_task_running_time()->usize{
+        current_task().unwrap().inner_exclusive_access().task_runningtime
+        }
+    
+        /// 增加系统调用数组的值
+        pub fn plus_syscall(syscall_id:usize){
+            current_task().unwrap().inner_exclusive_access().task_syscall[syscall_id]+=1;
+        }
+        /// 获得数组
+        pub fn get_syscall()->[u32;500]{
+            current_task().unwrap().inner_exclusive_access().task_syscall
+    
+        }
+    
+        ///修改任务地址空间
+        pub fn set_memory_set(start_va:VirtAddr,end_va:VirtAddr,permission:MapPermission){
+            current_task().unwrap().inner_exclusive_access().memory_set.insert_framed_area(start_va, end_va, permission);
+        }
+    
+        ///unmmap实现,
+        pub fn set_unmap(start_va:VirtAddr,len:usize){
+            let mut vpn=start_va.floor();
+    
+            for _ in 0..((len + PAGE_SIZE - 1) / PAGE_SIZE){
+                current_task().unwrap().inner_exclusive_access().memory_set.page_table.unmap(vpn);
+                vpn.step();
+            }
+    }

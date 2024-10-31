@@ -1,7 +1,7 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{TRAP_CONTEXT_BASE,MAX_SYSCALL_NUM};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
@@ -71,6 +71,14 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+    /// 系统调用
+    pub task_syscall:[u32;MAX_SYSCALL_NUM],
+    /// 运行时间
+    pub task_runningtime:usize,
+    ///步长
+    pub stride:usize,
+    ///优先级
+    pub prioity:usize
 }
 
 impl TaskControlBlockInner {
@@ -135,6 +143,10 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    task_syscall:[0;MAX_SYSCALL_NUM],
+                    task_runningtime:0,
+                    stride:0,
+                    prioity:16,
                 })
             },
         };
@@ -147,6 +159,7 @@ impl TaskControlBlock {
             kernel_stack_top,
             trap_handler as usize,
         );
+
         task_control_block
     }
 
@@ -216,6 +229,10 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    task_syscall:[0;MAX_SYSCALL_NUM],
+                    task_runningtime:0,
+                    stride:0,
+                    prioity:16,
                 })
             },
         });

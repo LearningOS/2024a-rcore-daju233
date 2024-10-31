@@ -2,16 +2,38 @@
 //!
 use alloc::sync::Arc;
 
+use alloc::boxed::Box;
+
 use crate::{
     config::MAX_SYSCALL_NUM,
-    fs::{open_file, OpenFlags},
-    mm::{translated_refmut, translated_str},
+    // fs::{open_file, OpenFlags},
+    mm::translated_refmut,
+    // mm::translated_str,
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next, TaskStatus,
+        get_syscall, get_task_running_time,
+         set_memory_set, set_unmap 
     },
 };
+use crate::timer::get_time_ms;
+use core::slice;
+use core::mem;
 
+// use crate::{
+//     config::MAX_SYSCALL_NUM, loader::get_app_data_by_name, mm::{translated_refmut, translated_str}, task::{
+//         add_task, current_task, current_user_token, exit_current_and_run_next, get_syscall, get_task_running_time, set_memory_set, set_unmap, suspend_current_and_run_next, TaskStatus, 
+//     }
+// };
+
+use crate::mm::MapPermission;
+use crate::timer::get_time_us;
+use crate::mm::translated_byte_buffer;
+use crate::mm::VirtAddr;
+use crate::mm::PageTable;
+use crate::config::PAGE_SIZE;
+use crate::mm::StepByOne;
+// use crate::mm::FrameTracker;
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -64,17 +86,18 @@ pub fn sys_fork() -> isize {
     new_pid as isize
 }
 
-pub fn sys_exec(path: *const u8) -> isize {
+pub fn sys_exec(_path: *const u8) -> isize {
     trace!("kernel:pid[{}] sys_exec", current_task().unwrap().pid.0);
-    let token = current_user_token();
-    let path = translated_str(token, path);
-    if let Some(data) = get_app_data_by_name(path.as_str()) {
-        let task = current_task().unwrap();
-        task.exec(data);
-        0
-    } else {
-        -1
-    }
+    // let token = current_user_token();
+    // let path = translated_str(token, path);
+    // if let Some(data) = get_app_data_by_name(path.as_str()) {
+    //     let task = current_task().unwrap();
+    //     task.exec(data);
+    //     0
+    // } else {
+    //     -1
+    // }
+    -1
 }
 
 /// If there is not a child process whose pid is same as given, return -1.
@@ -140,7 +163,6 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
             addr.copy_from_slice(res_arr);
         }
     }
-
     0
 }
 
@@ -208,7 +230,6 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
 
 /// YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    // println!("{}",len);
     trace!(
         "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
@@ -247,24 +268,25 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(path: *const u8) -> isize {
+pub fn sys_spawn(_path: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    let token = current_user_token();
-    let path = translated_str(token, path);
-    let current_task = current_task().unwrap();
-    let new_task = current_task.task_spawn(get_app_data_by_name(path.as_str()).unwrap());
-    let new_pid = new_task.pid.0;
-    // modify trap context of new_task, because it returns immediately after switching
-    let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
-    // we do not have to move to next instruction since we have done it before
-    // for child process, fork returns 0
-    trap_cx.x[10] = 0;
-    // add new task to scheduler
-    add_task(new_task);
-    new_pid as isize
+    // let token = current_user_token();
+    // let path = translated_str(token, path);
+    // let current_task = current_task().unwrap();
+    // let new_task = current_task.task_spawn(get_app_data_by_name(path.as_str()).unwrap());
+    // let new_pid = new_task.pid.0;
+    // // modify trap context of new_task, because it returns immediately after switching
+    // let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+    // // we do not have to move to next instruction since we have done it before
+    // // for child process, fork returns 0
+    // trap_cx.x[10] = 0;
+    // // add new task to scheduler
+    // add_task(new_task);
+    // new_pid as isize
+    -1
 }
 
 // YOUR JOB: Set task priority.
