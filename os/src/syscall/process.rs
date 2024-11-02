@@ -4,22 +4,23 @@ use alloc::sync::Arc;
 use alloc::boxed::Box;
 
 use crate::{
-    config::MAX_SYSCALL_NUM,
-    loader::get_app_data_by_name,
-    mm::{translated_refmut, translated_str},
-    task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next,
-        suspend_current_and_run_next, TaskStatus,
-    },
+    config::MAX_SYSCALL_NUM, loader::get_app_data_by_name, mm::{translated_refmut, translated_str}, task::{
+        add_task, current_task, current_user_token, exit_current_and_run_next, get_syscall, get_task_running_time, set_memory_set, set_unmap, suspend_current_and_run_next, TaskStatus, 
+    }
 };
+
 use crate::timer::get_time_ms;
-use crate::task::get_curr_running_time;
-use crate::task::get_curr_syscall;
 use core::slice;
 use core::mem;
-// use crate::mm::FrameTracker;
 use crate::mm::MapPermission;
-use crate::task::set_unmap;
+use crate::timer::get_time_us;
+use crate::mm::translated_byte_buffer;
+use crate::mm::VirtAddr;
+use crate::mm::PageTable;
+use crate::config::PAGE_SIZE;
+use crate::mm::StepByOne;
+
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -162,8 +163,8 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     );
     let res=Box::new(TaskInfo{
         status:TaskStatus::Running,
-        syscall_times:get_curr_syscall(),
-        time:get_time_ms()-get_curr_running_time(),
+        syscall_times:get_syscall(),
+        time:get_time_ms()-get_task_running_time(),
     });
     let res_ptr = Box::into_raw(res) as *const TaskInfo as *const u8;
     let taskinfo_size =mem::size_of::<TaskInfo>();
@@ -210,7 +211,7 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
         }
         vpn.step();
     }
-    set_curr_memory_set(start_va, end_va, map_perm);
+    set_memory_set(start_va, end_va, map_perm);
     0
 }
 
@@ -255,19 +256,34 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
+pub fn sys_spawn(path: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    let current_task = current_task().unwrap();
+    let new_task = current_task.task_spawn(get_app_data_by_name(path.as_str()).unwrap());
+    let new_pid = new_task.pid.0;
+    // modify trap context of new_task, because it returns immediately after switching
+    let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+    // we do not have to move to next instruction since we have done it before
+    // for child process, fork returns 0
+    trap_cx.x[10] = 0;
+    // add new task to scheduler
+    add_task(new_task);
+    new_pid as isize
 }
 
 // YOUR JOB: Set task priority.
-pub fn sys_set_priority(_prio: isize) -> isize {
+pub fn sys_set_priority(prio: isize) -> isize {
     trace!(
         "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    if prio<2 {return -1;}
+    let current_task = current_task().unwrap();
+    current_task.inner_exclusive_access().prioity = prio as usize; 
+    prio
 }

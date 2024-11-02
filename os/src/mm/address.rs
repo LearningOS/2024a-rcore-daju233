@@ -20,6 +20,7 @@ pub struct PhysPageNum(pub usize);
 /// virtual page number
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtPageNum(pub usize);
+// use crate::mm::address::StepByOne;
 
 /// Debugging
 
@@ -217,13 +218,16 @@ impl<T> SimpleRange<T>
 where
     T: StepByOne + Copy + PartialEq + PartialOrd + Debug,
 {
+    ///页表范围
     pub fn new(start: T, end: T) -> Self {
         assert!(start <= end, "start {:?} > end {:?}!", start, end);
         Self { l: start, r: end }
     }
+    ///页表左边界
     pub fn get_start(&self) -> T {
         self.l
     }
+    ///页表右边界
     pub fn get_end(&self) -> T {
         self.r
     }
@@ -250,6 +254,7 @@ impl<T> SimpleRangeIterator<T>
 where
     T: StepByOne + Copy + PartialEq + PartialOrd + Debug,
 {
+    ///页表范围？
     pub fn new(l: T, r: T) -> Self {
         Self { current: l, end: r }
     }

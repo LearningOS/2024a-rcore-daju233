@@ -1,7 +1,7 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::{TRAP_CONTEXT_BASE,MAX_SYSCALL_NUM};
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
@@ -21,7 +21,7 @@ pub struct TaskControlBlock {
     pub kernel_stack: KernelStack,
 
     /// Mutable
-    inner: UPSafeCell<TaskControlBlockInner>,
+    pub inner: UPSafeCell<TaskControlBlockInner>,
 }
 
 impl TaskControlBlock {
@@ -36,6 +36,7 @@ impl TaskControlBlock {
     }
 }
 
+///进程控制块数据
 pub struct TaskControlBlockInner {
     /// The physical page number of the frame where the trap context is placed
     pub trap_cx_ppn: PhysPageNum,
@@ -72,6 +73,10 @@ pub struct TaskControlBlockInner {
     pub task_syscall:[u32;MAX_SYSCALL_NUM],
     /// 运行时间
     pub task_runningtime:usize,
+    ///步长
+    pub stride:usize,
+    ///优先级
+    pub prioity:usize
 }
 
 impl TaskControlBlockInner {
@@ -86,6 +91,7 @@ impl TaskControlBlockInner {
     fn get_status(&self) -> TaskStatus {
         self.task_status
     }
+    /// isZombie?
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
     }
@@ -122,10 +128,12 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    task_syscall:[0;MAX_SYSCALL_NUM],
+                    task_runningtime:0,
+                    stride:0,
+                    prioity:16,
                 })
             },
-            task_syscall:[0;MAX_SYSCALL_NUM],
-            task_runningtime:0,
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
@@ -169,6 +177,9 @@ impl TaskControlBlock {
         // **** release inner automatically
     }
 
+
+
+
     /// parent process fork the child process
     pub fn fork(self: &Arc<Self>) -> Arc<Self> {
         // ---- access parent PCB exclusively
@@ -198,6 +209,10 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    task_syscall:[0;MAX_SYSCALL_NUM],
+                    task_runningtime:0,
+                    prioity:16,
+                    stride:0
                 })
             },
         });
@@ -212,7 +227,14 @@ impl TaskControlBlock {
         // **** release child PCB
         // ---- release parent PCB
     }
-
+    ///spawn实现
+    pub fn task_spawn(self:&Arc<Self>,elf_data:&[u8])->Arc<Self>{
+        let mut parent_inner = self.inner_exclusive_access();
+        let task_control_block = Arc::new(TaskControlBlock::new(elf_data));
+        task_control_block.inner_exclusive_access().parent = Some(Arc::downgrade(self));
+        parent_inner.children.push(task_control_block.clone());
+        task_control_block
+    }
     /// get pid of process
     pub fn getpid(&self) -> usize {
         self.pid.0
@@ -244,6 +266,7 @@ impl TaskControlBlock {
         }
     }
 }
+
 
 #[derive(Copy, Clone, PartialEq)]
 /// task status: UnInit, Ready, Running, Exited

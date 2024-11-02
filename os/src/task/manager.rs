@@ -1,9 +1,16 @@
 //!Implementation of [`TaskManager`]
+use crate::config::BIG_STRIDE;
+
 use super::TaskControlBlock;
 use crate::sync::UPSafeCell;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use lazy_static::*;
+// use crate::mm::address::StepByOne;
+// use crate::config::PAGE_SIZE;
+
+// use crate::task::MapPermission;
+
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
@@ -23,8 +30,17 @@ impl TaskManager {
     }
     /// Take a process out of the ready queue
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
-        self.ready_queue.pop_front()
+
+        let (index,res)= self.ready_queue
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, task)| task.inner_exclusive_access().stride).unwrap();
+
+        let pass = BIG_STRIDE/res.inner_exclusive_access().prioity;
+        res.inner_exclusive_access().stride+= pass; 
+        self.ready_queue.remove(index)
     }
+
 }
 
 lazy_static! {
