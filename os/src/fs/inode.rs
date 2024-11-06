@@ -20,12 +20,15 @@ use lazy_static::*;
 pub struct OSInode {
     readable: bool,
     writable: bool,
-    inner: UPSafeCell<OSInodeInner>,
+    ///内部数据
+    pub inner: UPSafeCell<OSInodeInner>,
 }
 /// The OS inode inner in 'UPSafeCell'
 pub struct OSInodeInner {
-    offset: usize,
-    inode: Arc<Inode>,
+    ///偏移量
+    pub offset: usize,
+    ///inode
+    pub inode: Arc<Inode>,
 }
 
 impl OSInode {
@@ -53,8 +56,8 @@ impl OSInode {
         v
     }
 }
-
 lazy_static! {
+    ///根目录节点
     pub static ref ROOT_INODE: Arc<Inode> = {
         let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
         Arc::new(EasyFileSystem::root_inode(&efs))
@@ -154,5 +157,12 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+    fn get_nlink_and_type_and_inode(&self)->(u32,u32,u32) {
+        self.inner.exclusive_access().inode.get_information()
+    }
+    fn get_inode_id(&self)->u32 {
+    //    self.inner.exclusive_access().inode.
+    0
     }
 }

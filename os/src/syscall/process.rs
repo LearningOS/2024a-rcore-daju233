@@ -5,16 +5,9 @@ use alloc::sync::Arc;
 use alloc::boxed::Box;
 
 use crate::{
-    config::MAX_SYSCALL_NUM,
-    // fs::{open_file, OpenFlags},
-    mm::translated_refmut,
-    // mm::translated_str,
-    task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next,
-        suspend_current_and_run_next, TaskStatus,
-        get_syscall, get_task_running_time,
-         set_memory_set, set_unmap 
-    },
+    config::MAX_SYSCALL_NUM, fs::{open_file, OpenFlags}, mm::{translated_refmut, translated_str}, task::{
+        add_task, current_task, current_user_token, exit_current_and_run_next, get_syscall, get_task_running_time, set_memory_set, set_unmap, suspend_current_and_run_next, TaskStatus 
+    }
 };
 use crate::timer::get_time_ms;
 use core::slice;
@@ -86,18 +79,18 @@ pub fn sys_fork() -> isize {
     new_pid as isize
 }
 
-pub fn sys_exec(_path: *const u8) -> isize {
+pub fn sys_exec(path: *const u8) -> isize {
     trace!("kernel:pid[{}] sys_exec", current_task().unwrap().pid.0);
-    // let token = current_user_token();
-    // let path = translated_str(token, path);
-    // if let Some(data) = get_app_data_by_name(path.as_str()) {
-    //     let task = current_task().unwrap();
-    //     task.exec(data);
-    //     0
-    // } else {
-    //     -1
-    // }
-    -1
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+        let all_data = app_inode.read_all();
+        let task = current_task().unwrap();
+        task.exec(all_data.as_slice());
+        0
+    } else {
+        -1
+    }
 }
 
 /// If there is not a child process whose pid is same as given, return -1.
@@ -268,25 +261,29 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
+pub fn sys_spawn(path: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    // let token = current_user_token();
-    // let path = translated_str(token, path);
-    // let current_task = current_task().unwrap();
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    let current_task = current_task().unwrap();
+    let mut new_pid:isize = -1;
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY){
+        let all_data = app_inode.read_all();
+        let new_task = current_task.task_spawn(&all_data);
     // let new_task = current_task.task_spawn(get_app_data_by_name(path.as_str()).unwrap());
-    // let new_pid = new_task.pid.0;
-    // // modify trap context of new_task, because it returns immediately after switching
-    // let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
-    // // we do not have to move to next instruction since we have done it before
-    // // for child process, fork returns 0
-    // trap_cx.x[10] = 0;
-    // // add new task to scheduler
-    // add_task(new_task);
-    // new_pid as isize
-    -1
+    new_pid = new_task.pid.0 as isize;
+    // modify trap context of new_task, because it returns immediately after switching
+    let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+    // we do not have to move to next instruction since we have done it before
+    // for child process, fork returns 0
+    trap_cx.x[10] = 0;
+    // add new task to scheduler
+    add_task(new_task);
+    }
+    new_pid as isize
 }
 
 // YOUR JOB: Set task priority.

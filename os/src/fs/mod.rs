@@ -15,6 +15,10 @@ pub trait File: Send + Sync {
     fn read(&self, buf: UserBuffer) -> usize;
     /// write to the file from buf, return the number of bytes written
     fn write(&self, buf: UserBuffer) -> usize;
+    ///获取nlink和type
+    fn get_nlink_and_type_and_inode(&self)->(u32,u32,u32);
+    ///获取inode
+    fn get_inode_id(&self)->u32;
 }
 
 /// The stat of a inode
@@ -30,7 +34,7 @@ pub struct Stat {
     /// number of hard links
     pub nlink: u32,
     /// unused pad
-    pad: [u64; 7],
+    pub pad: [u64; 7],
 }
 
 bitflags! {
@@ -46,5 +50,5 @@ bitflags! {
     }
 }
 
-pub use inode::{list_apps, open_file, OSInode, OpenFlags};
+pub use inode::{list_apps, open_file, OSInode, OpenFlags,ROOT_INODE};
 pub use stdio::{Stdin, Stdout};

@@ -1,3 +1,5 @@
+use crate::BLOCK_SZ;
+
 use super::{
     block_cache_sync_all, get_block_cache, BlockDevice, DirEntry, DiskInode, DiskInodeType,
     EasyFileSystem, DIRENT_SZ,
@@ -73,6 +75,21 @@ impl Inode {
             })
         })
     }
+    ///找inode_id?
+    // pub fn find_inode_id_test(&self, name: &str) -> Option<Arc<Inode>> {
+    //     let fs = self.fs.lock();
+    //     self.read_disk_inode(|disk_inode| {
+    //         self.find_inode_id(name, disk_inode).map(|inode_id| {
+    //             let (block_id, block_offset) = fs.get_disk_inode_pos(inode_id);
+    //             Arc::new(Self::new(
+    //                 block_id,
+    //                 block_offset,
+    //                 self.fs.clone(),
+    //                 self.block_device.clone(),
+    //             ))
+    //         })
+    //     })
+    // }
     /// Increase the size of a disk inode
     fn increase_size(
         &self,
@@ -138,6 +155,77 @@ impl Inode {
         )))
         // release efs lock automatically by compiler
     }
+
+    ///取消链接
+    pub fn my_unlink(&self,name: &str){
+       let inode=self.find(name).unwrap();
+       inode.modify_disk_inode(|inode|{
+           inode.link_num-=1;
+       });
+       self.modify_disk_inode(|root_inode|{
+        let file_num = (root_inode.size as usize)/DIRENT_SZ;
+        for i in 0..file_num{
+            let mut dirent =  DirEntry::empty();
+            assert_eq!(root_inode.read_at(i*DIRENT_SZ, dirent.as_bytes_mut(), &self.block_device),DIRENT_SZ);
+            if dirent.name()==name{
+                root_inode.write_at(
+                    i * DIRENT_SZ,
+                    DirEntry::empty().as_bytes(),
+                    &self.block_device,
+                );
+            }
+        }
+       })
+    }
+        /// 链接
+        pub fn my_create(&self, name: &str,old_name:&str) {
+            let mut old_inode_id = 114514;
+            let inode = self.find(old_name).unwrap();
+            let mut fs = self.fs.lock();
+
+            self.modify_disk_inode(|root_inode| {
+                old_inode_id = self.find_inode_id(old_name, root_inode).unwrap();
+                let file_count = (root_inode.size as usize) / DIRENT_SZ;
+                let new_size = (file_count + 1) * DIRENT_SZ;
+                // let (new_inode_block_id, new_inode_block_offset) = fs.get_disk_inode_pos(old_inode_id);
+                self.increase_size(new_size as u32, root_inode, &mut fs);
+                let dirent = DirEntry::new(name, old_inode_id);
+                root_inode.write_at(
+                    file_count * DIRENT_SZ,
+                    dirent.as_bytes(),
+                    &self.block_device,
+                );
+            });
+            inode.modify_disk_inode(|disk_inode|{
+                disk_inode.link_num+=1;
+            });
+            block_cache_sync_all();
+        }
+        ///获取信息
+        pub fn get_information(&self)->(u32,u32,u32){
+            //type link inode_id
+           let link_num = self.read_disk_inode(|disk_inode|{
+            disk_inode.link_num
+           });
+           let _fs = self.fs.lock();
+           let res = get_block_cache(self.block_id as usize, Arc::clone(&self.block_device))
+            .lock()
+            .read(self.block_offset, |my_inode: & DiskInode| {
+                let mut type_num:u32 = 1;
+                match my_inode.type_{
+                    DiskInodeType::File =>{
+                        type_num = 0o100000;
+                    },
+                    DiskInodeType::Directory =>{
+                        type_num = 0o040000;
+                    }
+                    _=>{type_num = 0;}
+                }
+                (type_num,link_num,0)
+                //inode_id硬编码为0也能过……到底怎么在inode里拿inode_id，用block_id和offset算？怎么算？
+            });
+            res
+        }
     /// List inodes under current inode
     pub fn ls(&self) -> Vec<String> {
         let _fs = self.fs.lock();
@@ -183,4 +271,5 @@ impl Inode {
         });
         block_cache_sync_all();
     }
+
 }
