@@ -181,6 +181,7 @@ impl Inode {
         pub fn my_create(&self, name: &str,old_name:&str) {
             let mut old_inode_id = 114514;
             let inode = self.find(old_name).unwrap();
+            //小心死锁
             let mut fs = self.fs.lock();
 
             self.modify_disk_inode(|root_inode| {
@@ -207,6 +208,7 @@ impl Inode {
            let link_num = self.read_disk_inode(|disk_inode|{
             disk_inode.link_num
            });
+           let inode_id = self.get_inode_id();
            let _fs = self.fs.lock();
            let res = get_block_cache(self.block_id as usize, Arc::clone(&self.block_device))
             .lock()
@@ -219,9 +221,8 @@ impl Inode {
                     DiskInodeType::Directory =>{
                         type_num = 0o040000;
                     }
-                    _=>{type_num = 0;}
                 }
-                (type_num,link_num,0)
+                (type_num,link_num,inode_id)
                 //inode_id硬编码为0也能过……到底怎么在inode里拿inode_id，用block_id和offset算？怎么算？
             });
             res
@@ -271,5 +272,14 @@ impl Inode {
         });
         block_cache_sync_all();
     }
+        ///获取inode_id
+        /// 此处有gpt和ostep以及群友帮助
+        pub fn get_inode_id(&self)->u32{
+            let start_block = self.fs.lock().inode_area_start_block;
+            let inode_size = core::mem::size_of::<DiskInode>();
+            let inode_per_block = (BLOCK_SZ / inode_size) as u32;
+            let inode_id = (self.block_id-start_block as usize)*inode_per_block as usize+self.block_offset/inode_size;
+            inode_id as u32
+        }
 
 }
