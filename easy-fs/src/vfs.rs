@@ -273,7 +273,7 @@ impl Inode {
         block_cache_sync_all();
     }
         ///获取inode_id
-        /// 此处有gpt和ostep以及群友帮助
+        /// 此处有gpt和ostep以及群友帮助，非常感谢……………………
         pub fn get_inode_id(&self)->u32{
             let start_block = self.fs.lock().inode_area_start_block;
             let inode_size = core::mem::size_of::<DiskInode>();
