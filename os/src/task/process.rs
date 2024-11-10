@@ -49,6 +49,20 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+        /// available
+        pub available: Vec<usize>,
+        /// allocation
+        pub allocation: Vec<Vec<usize>>,
+        /// need
+        pub need: Vec<Vec<usize>>,
+        /// available
+        pub available_sem: Vec<usize>,
+        /// allocation
+        pub allocation_sem: Vec<Vec<usize>>,
+        /// need
+        pub need_sem: Vec<Vec<usize>>,
+    ///检测吗
+    pub checked : bool,
 }
 
 impl ProcessControlBlockInner {
@@ -119,6 +133,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    available: vec![],
+                    allocation: vec![Vec::new()],
+                    need: vec![Vec::new()],
+                    available_sem: vec![],
+                    allocation_sem: vec![Vec::new()],
+                    need_sem: vec![Vec::new()],
+                    checked:false,
                 })
             },
         });
@@ -245,6 +266,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    available: vec![],
+                    allocation: vec![Vec::new()],
+                    need: vec![Vec::new()],
+                    available_sem: vec![],
+                    allocation_sem: vec![Vec::new()],
+                    need_sem: vec![Vec::new()],
+                    checked:false
                 })
             },
         });

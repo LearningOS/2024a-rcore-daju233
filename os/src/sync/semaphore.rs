@@ -52,4 +52,14 @@ impl Semaphore {
             block_current_and_run_next();
         }
     }
+        /// detect
+        pub fn detect(&self, id:usize) -> bool{
+            let inner = self.inner.exclusive_access();
+            for task in inner.wait_queue.clone(){
+                if task.process.upgrade().unwrap().getpid() == id && inner.count < 1{
+                    return true;
+                }
+            }
+            false
+        }
 }
